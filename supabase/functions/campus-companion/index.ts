@@ -18,6 +18,12 @@ Deno.serve(async (req: Request) => {
     const { data: auth, error: authError } = await sb.auth.getUser(bearer.slice(7));
     if (authError || !auth.user) return reply({ error_code: "invalid_credentials" }, 401);
     const body = await req.json();
+    const explicitSelection = body.selected_course_ids !== undefined;
+    if (!explicitSelection) {
+      const { data: saved, error } = await sb.from("user_courses").select("course_id").eq("user_id", auth.user.id);
+      if (error) return reply({ error: "Saved timetable could not be loaded" }, 503);
+      body.selected_course_ids = (saved ?? []).map(row => row.course_id);
+    }
     if (!validSelection(body.selected_course_ids)) return reply({ error_code: "validation_failed" }, 400);
     const selected = [...new Set<number>(body.selected_course_ids)];
     const question = typeof body.question === "string" ? body.question.trim().slice(0, 1500) : "";
@@ -42,7 +48,7 @@ Deno.serve(async (req: Request) => {
     // Keep time, walking, meal and class constraints in the existing server agent.
     const planResponse = await fetch(`${url}/functions/v1/free-time-agent`, {
       method: "POST", headers: { "Content-Type": "application/json", "Authorization": bearer, "apikey": req.headers.get("apikey") ?? "" },
-      body: JSON.stringify({ selected_course_ids: selected, current_time: now.toISOString(), use_ai: false }), signal: AbortSignal.timeout(25_000),
+      body: JSON.stringify({ ...(explicitSelection ? { selected_course_ids: selected } : {}), current_time: now.toISOString(), use_ai: false }), signal: AbortSignal.timeout(25_000),
     });
     if (!planResponse.ok) return reply({ error: "The timetable agent could not be reached" }, planResponse.status);
     const plan = await planResponse.json();

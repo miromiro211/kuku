@@ -39,6 +39,34 @@ class SupabaseContractTest {
         check(parseAgentResult(free.toString()).nextClass!!.contains("13:00 · 운영체제"))
     }
 
+    @Test fun savedTimetableAndV17() {
+        FakeHttp.install()
+        FakeHttp.connections.clear(); FakeHttp.responses.clear()
+        val repo = SupabaseRepository("https://contract.invalid", "sb_publishable_test")
+        FakeHttp.responses.add(200 to JSONObject(session("jwt-user", 3600)).put("user", JSONObject().put("id", "user-test")).toString())
+        repo.signIn("student@example.com", "password")
+        FakeHttp.responses.add(200 to "[{\"course_id\":1}]")
+        FakeHttp.responses.add(201 to "")
+        FakeHttp.responses.add(204 to "")
+        FakeHttp.responses.add(200 to "[{\"course_id\":2}]")
+        repo.saveCourses(setOf(2L))
+        val insert = FakeHttp.connections[2]
+        check(insert.requestMethod == "POST")
+        check(org.json.JSONArray(insert.body.toString("UTF-8")).getJSONObject(0).getString("user_id") == "user-test")
+        check(FakeHttp.connections[3].requestMethod == "DELETE")
+        check(FakeHttp.connections[3].url.query.contains("course_id=in.(1)"))
+        check(FakeHttp.connections.drop(1).all { it.getRequestProperty("Authorization") == "Bearer jwt-user" })
+        FakeHttp.responses.add(200 to JSONObject(classResponse).put("data_sources", JSONObject().put("timetable", "실제 시간표")).toString())
+        val result = repo.recommend(emptySet(), false)
+        check(result.dataSources["timetable"] == "실제 시간표")
+        check(!JSONObject(FakeHttp.connections.last().body.toString("UTF-8")).has("selected_course_ids"))
+        check(parseAgentResult(classResponse).dataSources.isEmpty())
+        FakeHttp.responses.add(200 to "[{\"course_id\":2}]")
+        FakeHttp.responses.add(403 to "{}")
+        check(runCatching { repo.saveCourses(setOf(3L)) }.isFailure)
+        check(FakeHttp.connections.last().requestMethod == "POST")
+    }
+
     @Test fun headersRefreshAndAuthFailure() {
         FakeHttp.install()
         FakeHttp.connections.clear()

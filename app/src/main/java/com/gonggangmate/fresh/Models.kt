@@ -55,6 +55,7 @@ data class MateState(
     val authBusy: Boolean = false,
     val authMessage: String? = null,
     val timetableReady: Boolean = false,
+    val timetableSaving: Boolean = false,
     val catalogBusy: Boolean = false,
     val catalogError: String? = null,
     val courses: List<Course> = emptyList(),

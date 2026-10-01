@@ -103,14 +103,14 @@ fun TimetableScreen(state: MateState, onSelect: (Long) -> Unit, onReload: () -> 
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 FilterChip(selectedOnly, { selectedOnly = !selectedOnly }, label = { Text("선택한 과목 ${state.selectedCourseIds.size}") })
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = onReload, enabled = !state.catalogBusy) { Text("다시 불러오기") }
+                TextButton(onClick = onReload, enabled = !state.catalogBusy && !state.timetableSaving) { Text("다시 불러오기") }
             }
             if (conflict) Text("수업 시간이 겹치는 과목이 있어요. 분반과 시간을 확인해주세요.", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-            if (state.catalogBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (state.catalogBusy || state.timetableSaving) LinearProgressIndicator(Modifier.fillMaxWidth())
             state.catalogError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
         }
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(24.dp, 10.dp, 24.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (filtered.isEmpty() && !state.catalogBusy) item { QuietEmpty("과목이 보이지 않아요", "검색어를 바꾸거나 시간표를 다시 불러와주세요.") }
+            if (filtered.isEmpty() && !state.catalogBusy && !state.timetableSaving) item { QuietEmpty("과목이 보이지 않아요", "검색어를 바꾸거나 시간표를 다시 불러와주세요.") }
             items(filtered, key = { it.id }) { course ->
                 val selected = course.id in state.selectedCourseIds
                 val sessions = state.sessions.filter { it.courseId == course.id }
@@ -133,7 +133,7 @@ fun TimetableScreen(state: MateState, onSelect: (Long) -> Unit, onReload: () -> 
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp)) {
                 Text("시간표는 나중에 수정할 수 있어요.", fontSize = 11.sp, color = Muted)
                 Spacer(Modifier.height(8.dp))
-                Button(onFinish, enabled = canFinishTimetable(state.courses, state.sessions, state.selectedCourseIds) && !state.catalogBusy,
+                Button(onFinish, enabled = canFinishTimetable(state.courses, state.sessions, state.selectedCourseIds) && !state.catalogBusy && !state.timetableSaving,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp), shape = RoundedCornerShape(18.dp)) {
                     Text("${state.selectedCourseIds.size}개 과목으로 쿠루 만나기")
                 }

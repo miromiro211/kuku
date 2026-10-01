@@ -76,12 +76,14 @@ class MateViewModel(application: Application) : AndroidViewModel(application) {
         val account = repository.userId
         viewModelScope.launch {
             try {
-                val (courses, sessions) = withContext(Dispatchers.IO) { repository.courses() to repository.sessions() }
+                val (courses, sessions, saved) = withContext(Dispatchers.IO) {
+                    Triple(repository.courses(), repository.sessions(), repository.savedCourseIds())
+                }
                 if (account != repository.userId) return@launch
                 mutableState.update { before ->
-                    val selected = before.selectedCourseIds.intersect(courses.map { it.id }.toSet())
+                    val selected = (if (saved.isNotEmpty()) saved else before.selectedCourseIds).intersect(courses.map { it.id }.toSet())
                     before.copy(courses = courses, sessions = sessions, selectedCourseIds = selected,
-                        timetableReady = (restoreReady || before.timetableReady) && canFinishTimetable(courses, sessions, selected))
+                        timetableReady = saved.isNotEmpty() && canFinishTimetable(courses, sessions, selected))
                 }
                 if (state.value.timetableReady) requestAgent()
             } catch (cancelled: CancellationException) { throw cancelled
@@ -91,14 +93,26 @@ class MateViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectCourse(id: Long) {
-        if (state.value.agentBusy || state.value.courses.none { it.id == id } || state.value.sessions.none { it.courseId == id }) return
+        if (state.value.timetableSaving || state.value.catalogBusy || state.value.agentBusy || state.value.courses.none { it.id == id } || state.value.sessions.none { it.courseId == id }) return
         mutableState.update { it.copy(selectedCourseIds = if (id in it.selectedCourseIds) it.selectedCourseIds - id else it.selectedCourseIds + id) }
     }
     fun finishTimetable() {
-        if (!canFinishTimetable(state.value.courses, state.value.sessions, state.value.selectedCourseIds)) return
-        mutableState.update { it.copy(timetableReady = true, serverResult = null, resultUpdatedAt = 0, agentError = null) }
-        saveProfile()
-        requestAgent()
+        val before = state.value
+        if (before.timetableSaving || before.catalogBusy || !canFinishTimetable(before.courses, before.sessions, before.selectedCourseIds)) return
+        val account = repository.userId
+        mutableState.update { it.copy(timetableSaving = true, catalogError = null) }
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repository.saveCourses(before.selectedCourseIds) }
+                if (account != repository.userId) return@launch
+                mutableState.update { it.copy(timetableReady = true, serverResult = null, resultUpdatedAt = 0, agentError = null) }
+                saveProfile()
+                requestAgent()
+            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (error: Exception) {
+                if (account == repository.userId) mutableState.update { it.copy(catalogError = "시간표 저장에 실패했어요. " + readable(error)) }
+            } finally { if (account == repository.userId) mutableState.update { it.copy(timetableSaving = false) } }
+        }
     }
     fun editTimetable() {
         if (state.value.agentBusy) return
@@ -201,7 +215,7 @@ class MateViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun stopFocus() { mutableState.update { it.copy(focusEndsAt = null) } }
     fun signOut() {
-        if (state.value.agentBusy || state.value.authBusy) return
+        if (state.value.agentBusy || state.value.authBusy || state.value.timetableSaving) return
         mutableState.update { it.copy(authBusy = true) }
         viewModelScope.launch {
             try { withContext(Dispatchers.IO) { repository.signOut() } }

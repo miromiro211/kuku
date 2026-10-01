@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gonggangmate.fresh.*
@@ -64,21 +65,41 @@ fun AgentHome(state: MateState, onProfile: () -> Unit, onChat: () -> Unit, onRef
                         Text("쿠루의 제안", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         Text(if (state.agentBusy) "살펴보고 있어" else if (!fresh) "업데이트 필요" else if (state.aiResponse) "AI가 정리했어" else "기본 시간표 계획", color = Muted, fontSize = 10.sp)
                     }
-                    MarkdownText(if (state.agentBusy && state.serverResult == null) "네 수업 시간과 학교 소식을 함께 살펴보고 있어. 잠깐만 기다려줄래?"
-                        else if (moment.inClass) "지금은 ${state.courseName(moment.current!!.courseId)}에 집중하자. 수업이 끝나면 남은 공강에 맞춰 다시 제안할게."
-                        else if (!fresh) "현재 시간을 기준으로 계획을 확인해볼까? 이동 여유까지 챙겨줄게."
-                        else state.agentMessage, fontSize = 16.sp, lineHeight = 26.sp)
+                    val recommendation = when {
+                        state.agentBusy && state.serverResult == null -> "이번 공강에 할 일을 살펴보고 있어."
+                        moment.inClass -> "지금은 ${state.courseName(moment.current!!.courseId)}에 집중하자."
+                        !fresh -> "지금 할 일을 다시 살펴볼까?"
+                        else -> state.agentMessage
+                    }
+                    Text(recommendation, fontSize = 18.sp, lineHeight = 27.sp,
+                        fontWeight = FontWeight.Medium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    if (fresh && !moment.inClass && state.serverResult != null) {
+                        val usable = minOf(moment.usableMinutes, state.serverResult.usableMinutes)
+                        if (usable > 0) StatusPill("이동 여유 빼고 ${usable}분 활용 가능")
+                    }
+                    if (fresh) TextButton(onClick = onChat, contentPadding = PaddingValues(0.dp)) {
+                        Text("자세히 이야기하기", fontSize = 12.sp)
+                        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(16.dp))
+                    }
+                    state.serverResult?.dataSources?.takeIf { it.isNotEmpty() }?.let { sources ->
+                        var showSources by remember(sources) { mutableStateOf(false) }
+                        TextButton(onClick = { showSources = !showSources }, contentPadding = PaddingValues(0.dp)) {
+                            Text(if (showSources) "참고 데이터 접기" else "참고 데이터 보기", color = Muted, fontSize = 11.sp)
+                        }
+                        if (showSources) Text(sources.values.joinToString("\n"), color = Muted,
+                            fontSize = 11.sp, lineHeight = 17.sp)
+                    }
                     state.agentError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
                     if (state.agentBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
                     val opportunity = state.primaryOpportunity
                     if (opportunity != null && fresh && !moment.inClass) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { onAccept(opportunity) }, enabled = !state.agentBusy, shape = RoundedCornerShape(14.dp)) { Text("이걸로 준비할래") }
-                            TextButton(onClick = { onOpportunity(opportunity) }) { Text("먼저 살펴볼게") }
+                            Button(onClick = { onAccept(opportunity) }, enabled = !state.agentBusy, shape = RoundedCornerShape(14.dp)) { Text("준비 시작") }
+                            TextButton(onClick = { onOpportunity(opportunity) }) { Text("소식 보기") }
                         }
                     } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onPlans, shape = RoundedCornerShape(14.dp)) { Text("내 계획 살펴보기") }
-                        TextButton(onClick = onRefresh, enabled = !state.agentBusy) { Text("다시 살펴봐줘") }
+                        Button(onClick = onPlans, shape = RoundedCornerShape(14.dp)) { Text("내 계획") }
+                        TextButton(onClick = onRefresh, enabled = !state.agentBusy) { Text("다시 추천") }
                     }
                 }
             }

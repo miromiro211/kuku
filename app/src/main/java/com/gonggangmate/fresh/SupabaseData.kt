@@ -20,7 +20,8 @@ data class PlanStep(
 data class AgentResult(
     val mode: String, val evaluatedAt: String, val action: String, val reason: String,
     val freeMinutes: Int, val usableMinutes: Int, val nextClass: String?,
-    val steps: List<PlanStep>, val factors: List<String>, val source: String
+    val steps: List<PlanStep>, val factors: List<String>, val source: String,
+    val dataSources: Map<String, String> = emptyMap()
 ) {
     fun chatText() = buildString {
         append(action).append("\n").append(reason)
@@ -74,7 +75,12 @@ fun parseAgentResult(json: String): AgentResult {
         value.getInt("free_minutes"), value.getInt("usable_minutes"),
         next?.let { "${it.optString("start_time")} · ${it.optString("name")} " +
             listOfNotNull(it.nullableText("building"), it.nullableText("room")).joinToString(" ") },
-        steps, List(factors.length()) { factors.getString(it) }, value.optString("source", "rule"))
+        steps, List(factors.length()) { factors.getString(it) }, value.optString("source", "rule"),
+        value.optJSONObject("data_sources")?.let { sources ->
+            sources.keys().asSequence().mapNotNull { rawKey ->
+                val key = rawKey as? String ?: return@mapNotNull null
+                sources.nullableText(key)?.let { key to it }
+            }.toMap() } ?: emptyMap())
 }
 
 fun validateCredentials(email: String, password: String, register: Boolean = false) {
@@ -129,7 +135,8 @@ class SupabaseRepository(
         private set
     val signedIn: Boolean get() = accessToken != null
 
-    private fun request(path: String, body: JSONObject? = null, token: String? = null): String {
+    private fun request(path: String, body: JSONObject? = null, token: String? = null,
+                        method: String = if (body == null) "GET" else "POST", payload: JSONArray? = null): String {
         require(baseUrl.startsWith("https://") && publishableKey.startsWith("sb_publishable_")) {
             "Supabase 연결 설정을 확인해주세요."
         }
@@ -138,14 +145,14 @@ class SupabaseRepository(
             connection.connectTimeout = 15000
             connection.readTimeout = 90000
             connection.instanceFollowRedirects = false
-            connection.requestMethod = if (body == null) "GET" else "POST"
+            connection.requestMethod = method
             connection.setRequestProperty("apikey", publishableKey)
             connection.setRequestProperty("Accept", "application/json")
             if (token != null) connection.setRequestProperty("Authorization", "Bearer $token")
-            if (body != null) {
+            if (body != null || payload != null) {
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                connection.outputStream.use { it.write((payload?.toString() ?: body.toString()).toByteArray(Charsets.UTF_8)) }
             }
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
@@ -160,6 +167,35 @@ class SupabaseRepository(
 
     fun courses() = parseCourses(request("/rest/v1/course_catalog?select=id,name,course_code,department,professor&order=name&limit=1000"))
     fun sessions() = parseSessions(request("/rest/v1/course_sessions?select=course_id,day_of_week,start_time,end_time,building_name,room&order=day_of_week,start_time&limit=1000"))
+
+    @Synchronized
+    fun savedCourseIds(): Set<Long> {
+        check(signedIn) { "로그인해주세요." }
+        refreshIfNeeded()
+        val owner = checkNotNull(userId) { "로그인 사용자 정보를 확인할 수 없어요. 다시 로그인해주세요." }
+        val rows = JSONArray(request("/rest/v1/user_courses?select=course_id&user_id=eq.$owner", token = accessToken))
+        return (0 until rows.length()).map { rows.getJSONObject(it).getLong("course_id") }.toSet()
+    }
+
+    @Synchronized
+    fun saveCourses(ids: Set<Long>) {
+        require(ids.isNotEmpty() && ids.all { it > 0 }) { "시간표에서 과목을 선택해주세요." }
+        val existing = savedCourseIds()
+        val owner = checkNotNull(userId)
+        // Insert first so a failed insert never erases the previous timetable.
+        val added = ids - existing
+        if (added.isNotEmpty()) {
+            val rows = JSONArray().apply { added.sorted().forEach {
+                put(JSONObject().put("user_id", owner).put("course_id", it))
+            } }
+            request("/rest/v1/user_courses", token = accessToken, method = "POST", payload = rows)
+        }
+        val removed = existing - ids
+        if (removed.isNotEmpty()) request(
+            "/rest/v1/user_courses?user_id=eq.$owner&course_id=in.(${removed.sorted().joinToString(",")})",
+            token = accessToken, method = "DELETE")
+        check(savedCourseIds() == ids) { "시간표 저장 결과를 확인할 수 없어요. 다시 저장해주세요." }
+    }
 
     private fun acceptSession(json: String) {
         val session = JSONObject(json)
@@ -229,13 +265,14 @@ class SupabaseRepository(
     }
     @Synchronized
     fun recommend(ids: Set<Long>, useAi: Boolean): AgentResult {
-        require(ids.isNotEmpty() && ids.all { it > 0 }) { "시간표에서 과목을 선택해주세요." }
+        require(ids.all { it > 0 }) { "과목 정보를 확인해주세요." }
         check(signedIn) { "공강 추천을 받으려면 로그인해주세요." }
         try {
             refreshIfNeeded()
             return parseAgentResult(request("/functions/v1/free-time-agent",
-                JSONObject().put("selected_course_ids", JSONArray(ids.sorted()))
-                    .put("current_time", utcNow()).put("use_ai", useAi), accessToken))
+                JSONObject().put("current_time", utcNow()).put("use_ai", useAi).apply {
+                    if (ids.isNotEmpty()) put("selected_course_ids", JSONArray(ids.sorted()))
+                }, accessToken))
         } catch (error: SupabaseHttpError) {
             if (error.status == 401 || error.status == 403) {
                 clearSession()
