@@ -64,7 +64,7 @@ fun AgentHome(state: MateState, onProfile: () -> Unit, onChat: () -> Unit, onRef
                         Text("쿠루의 제안", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         Text(if (state.agentBusy) "살펴보고 있어" else if (!fresh) "업데이트 필요" else if (state.aiResponse) "AI가 정리했어" else "기본 시간표 계획", color = Muted, fontSize = 10.sp)
                     }
-                    Text(if (state.agentBusy && state.serverResult == null) "네 수업 시간과 학교 소식을 함께 살펴보고 있어. 잠깐만 기다려줄래?"
+                    MarkdownText(if (state.agentBusy && state.serverResult == null) "네 수업 시간과 학교 소식을 함께 살펴보고 있어. 잠깐만 기다려줄래?"
                         else if (moment.inClass) "지금은 ${state.courseName(moment.current!!.courseId)}에 집중하자. 수업이 끝나면 남은 공강에 맞춰 다시 제안할게."
                         else if (!fresh) "현재 시간을 기준으로 계획을 확인해볼까? 이동 여유까지 챙겨줄게."
                         else state.agentMessage, fontSize = 16.sp, lineHeight = 26.sp)

@@ -173,7 +173,7 @@ fun TaskDetail(task: WorkItem, state: MateState, onPrepare: () -> Unit, onFocus:
         }
         state.agentError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
         if (task.notes.isNotBlank()) {
-            Surface(shape = RoundedCornerShape(20.dp), color = Color.White) { Text(task.notes, Modifier.padding(18.dp), lineHeight = 25.sp) }
+            Surface(shape = RoundedCornerShape(20.dp), color = Color.White) { MarkdownText(task.notes, Modifier.padding(18.dp), lineHeight = 25.sp) }
             TextButton(onClick = { clipboard.setText(AnnotatedString(task.notes)); copied = true }) {
                 Icon(Icons.Outlined.ContentCopy, null, Modifier.size(16.dp)); Spacer(Modifier.width(8.dp)); Text(if (copied) "복사했어요" else "준비안 복사")
             }
@@ -240,15 +240,20 @@ fun AgentChat(state: MateState, onSend: (String) -> Unit) {
             if (state.messages.isEmpty()) item { QuietEmpty("무엇이든 작은 시작부터", "공강 계획, 과제 개요, 공모전 준비를 같이 생각해봐요.") }
             items(state.messages) { message -> Row(Modifier.fillMaxWidth(), horizontalArrangement = if (message.mine) Arrangement.End else Arrangement.Start) {
                 Surface(color = if (message.mine) Green else Color.White, shape = RoundedCornerShape(20.dp), modifier = Modifier.widthIn(max = 300.dp)) {
-                    Text(message.body, Modifier.padding(16.dp), color = if (message.mine) Color.White else Ink, fontSize = 14.sp, lineHeight = 24.sp)
+                    if (message.mine) Text(message.body, Modifier.padding(16.dp), color = Color.White, fontSize = 14.sp, lineHeight = 24.sp)
+                    else MarkdownText(message.body, Modifier.padding(16.dp), color = Ink, fontSize = 14.sp, lineHeight = 24.sp)
                 }
             } }
             if (state.agentBusy) item { Text("쿠루가 생각하고 있어…", color = Green, fontSize = 12.sp) }
             state.agentError?.let { item { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) } }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("이 공강에 뭐 할까?", "내 과제 준비 도와줘", "다가오는 일정 알려줘").forEach { text ->
+            listOf("이 공강에 뭐 할까?", "다가오는 일정 알려줘").forEach { text ->
                 SuggestionChip(onClick = { onSend(text) }, enabled = !state.agentBusy, label = { Text(text, fontSize = 11.sp) })
+            }
+            state.tasks.filterNot { it.completed }.take(6).forEach { task ->
+                SuggestionChip(onClick = { onSend("등록된 과제 '${task.title}' 준비를 도와줘. 과제 목록에서 이 항목을 기준으로 준비 순서와 체크리스트를 만들어줘.") },
+                    enabled = !state.agentBusy, label = { Text("${task.title} 준비", fontSize = 11.sp) })
             }
         }
         Row(Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding(), verticalAlignment = Alignment.CenterVertically) {
