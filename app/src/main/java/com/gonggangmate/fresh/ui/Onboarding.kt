@@ -6,9 +6,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -84,11 +81,10 @@ fun AuthScreen(state: MateState, onAuth: (String, String, Boolean) -> Unit, onRe
 
 @Composable
 fun TimetableScreen(state: MateState, onSelect: (Long) -> Unit, onReload: () -> Unit, onFinish: () -> Unit, onLogout: () -> Unit) {
-    var query by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
-    val keyboard = LocalSoftwareKeyboardController.current
+    var query by rememberSaveable { mutableStateOf("") }
     var selectedOnly by rememberSaveable { mutableStateOf(false) }
     val filtered = state.courses.filter { course ->
-        (!selectedOnly || course.id in state.selectedCourseIds) && listOf(course.name, course.code, course.department, course.professor).any { it.contains(query.text.trim(), ignoreCase = true) }
+        (!selectedOnly || course.id in state.selectedCourseIds) && listOf(course.name, course.code, course.department, course.professor).any { it.contains(query.trim(), ignoreCase = true) }
     }
     val conflict = hasCourseConflict(state.sessions, state.selectedCourseIds)
     Column(Modifier.fillMaxSize().background(Paper).safeDrawingPadding().imePadding()) {
@@ -103,13 +99,7 @@ fun TimetableScreen(state: MateState, onSelect: (Long) -> Unit, onReload: () -> 
             Spacer(Modifier.height(20.dp))
             OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
                 placeholder = { Text("과목명 · 학과 · 교수 · 과목코드") }, shape = RoundedCornerShape(20.dp),
-                leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Text,
-                    imeAction = ImeAction.Search,
-                    hintLocales = LocaleList("ko-KR,en-US")
-                ),
-                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }))
+                leadingIcon = { Icon(Icons.Outlined.Search, null) })
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 FilterChip(selectedOnly, { selectedOnly = !selectedOnly }, label = { Text("선택한 과목 ${state.selectedCourseIds.size}") })
                 Spacer(Modifier.weight(1f))
