@@ -1,50 +1,99 @@
-# 쿠루 · 건국대 공강메이트
+# KUKU · 건국대 공강메이트
 
-건국대학교 GLOCAL 학생의 시간표와 학교 소식을 챙기는 캐릭터 중심 Android 에이전트입니다. Muse와 Dots의 동반자 경험을 참고하되, 캐릭터와 화면은 직접 만든 디자인입니다.
+**팀명: 컴파일 에러**  
+**프로젝트명: KUKU**
 
-## 앱 흐름
+KUKU는 건국대학교 GLOCAL캠퍼스 학생의 **시간표, 공강 시간, 학교 소식**을 관리해 주는 캐릭터 중심 Android AI 에이전트입니다.
 
-1. 회원가입 또는 로그인. Supabase 확인 메일 승인 후 로그인합니다.
-2. 과목명, 과목코드, 학과, 교수명으로 서버 과목을 검색해 수강 시간표를 선택합니다.
-3. 쿠루 메인화면에서 현재 수업·다음 수업·공강을 확인합니다. 에이전트가 자동으로 공강 계획과 예정 소식을 살펴봅니다.
-4. 제안을 수락하면 내 계획에 저장하고 공모전 준비안·신청 서류 체크리스트·과제 개요 등을 받습니다.
-5. 준비안을 복사하고, 다음 수업 이동 여유를 남긴 집중 타이머를 시작하거나 완료한 계획을 표시합니다.
-6. 학교 소식 탭에서 공모전·장학금·학사 일정을 보고 원문을 열 수 있습니다.
+학생의 시간표를 기반으로 현재 수업과 다음 수업을 확인하고, 공강 시간에 할 수 있는 활동을 AI가 제안합니다. 또한 공모전, 장학금, 학사 일정과 같은 학교 정보를 함께 확인하여 필요한 준비 사항과 체크리스트를 제공합니다.
 
-## Supabase 연결
+## 주요 기능
 
-기존 프로젝트 `gbveuxpgwooarmbzlhlz`를 사용합니다.
+- 이메일 회원가입 및 로그인
+- 서버 과목 검색 및 개인 시간표 등록
+- 현재 수업 / 다음 수업 / 공강 시간 확인
+- AI 기반 공강 활동 및 일정 추천
+- 공모전·장학금·학사 일정 확인
+- 공모전 준비안, 신청 서류 체크리스트, 과제 개요 생성
+- 개인 할 일 및 계획 저장
+- 집중 타이머 기능
+- 앱 재실행 시 로그인 및 시간표 복원
 
-- Auth: 이메일 가입, 로그인, 로그아웃, 세션 갱신
-- Data API: `course_catalog`, `course_sessions`, `contests`, `scholarships`, `academic_events`
-- 기존 `free-time-agent`: 시간표, 이동시간, 식사, 수업 제약을 계산하는 공강 계획
-- 새 `campus-companion`: 기존 공강 계획을 사용하고 학교 소식·선택 과목·사용자 할 일을 함께 고려하여 제안과 준비안을 생성
-- 기존 자동 수집 작업 유지: 공모전/장학금 6시간마다, 학사 일정 매일
-- 앱이 화면에 있는 동안 소식은 15분마다 확인하며, 계획은 15분마다 또는 수업 경계가 바뀔 때 갱신합니다. 앱을 다시 열면 시간을 즉시 비교합니다.
+## 주요 사용 기술
 
-새 함수 소스는 `supabase/functions/campus-companion/`에 있습니다. 기존 함수·테이블·수집 예약 작업은 변경하지 않습니다. 서버의 `OPENAI_API_KEY`, `OPENAI_MODEL`을 사용하며 비밀 키는 앱에 넣지 않습니다. AI 호출에 실패하면 기본 시간표 계획과 기본 준비안을 명시하여 반환합니다.
+### Android
+- Kotlin
+- Jetpack Compose
+- Android Studio
+- Android Keystore
+- AES-GCM
 
-## 저장과 범위
+### Backend / Database
+- Supabase
+- Supabase Auth
+- PostgreSQL
+- Supabase Data API
+- Supabase Edge Functions
 
-로그인 토큰은 Android Keystore AES-GCM으로 암호화해 저장합니다. 비밀번호는 저장하지 않습니다. 로그인, 시간표, 계정별 계획과 대화는 앱 재시작 후 복원됩니다. 시간표는 로그인 사용자 JWT로 `user_courses`에 저장하고 로그인 시 복원합니다. 저장 완료 전에는 추천을 시작하지 않습니다. 계획·대화는 사용자 ID로 분리한 기기 로컬 저장입니다. 집중 타이머는 앱 재시작 시 종료됩니다.
+### AI / Agent
+- OpenAI API
+- `free-time-agent`
+  - 시간표, 이동시간, 식사, 수업 제약을 고려한 공강 계획 생성
+- `campus-companion`
+  - 공강 계획과 학교 소식, 선택 과목, 사용자 할 일을 종합해 맞춤 제안 및 준비안 생성
 
-수업시간이 서버에 없는 과목은 자동 공강 계산에 사용할 수 없으므로 선택을 막고 안내합니다. 시간이 겹치는 과목은 분반을 확인해야 진행할 수 있습니다. 과제는 사용자가 추가한 할 일과 free-time-agent v17이 조회한 사용자 TLS 과제을 고려합니다. 에이전트가 실제 교수의 과제를 자동 수집하거나 제출하지는 않습니다.
+### 주요 데이터
+- `course_catalog`
+- `course_sessions`
+- `user_courses`
+- `contests`
+- `scholarships`
+- `academic_events`
 
-AI는 준비 개요와 체크리스트 등 초안을 만들며 공모전/장학금 신청이나 과제 제출을 대신 수행하지 않습니다. 신청 자격과 마감 시각은 원문 확인이 필요합니다. 현재 데이터에 미래 마감의 소식이 없으면 빈 상태를 표시하며 임의의 소식을 만들지 않습니다.
+## 실행 방법
 
-## 실행
+### 1. 프로젝트 열기
 
-Android Studio에서 `settings.gradle.kts`가 있는 폴더를 엽니다. JDK 17, Android SDK 35, API 26 이상 기기가 필요합니다. Gradle 동기화 후 앱을 실행하세요.
+Android Studio에서 `settings.gradle.kts`가 있는 KUKU 프로젝트 폴더를 엽니다.
 
-다른 프로젝트로 연결할 때는 `local.properties`의 기존 `sdk.dir`을 유지하고 추가합니다:
+### 2. 개발 환경 확인
+
+다음 환경이 필요합니다.
+
+- JDK 17
+- Android SDK 35
+- Android API 26 이상 기기 또는 에뮬레이터
+
+### 3. Supabase 설정
+
+`local.properties`의 기존 `sdk.dir`은 유지하고 다음 값을 추가합니다.
 
 ```properties
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_PUBLIC_KEY
 ```
 
-패키지: `com.gonggangmate.fresh`. 앱 이름: `쿠루 · 공강메이트`, 버전 `2.0-kuru`.
+### 4. 실행
 
-v17 연동: `user_courses` 조회·추가·삭제, 저장 후 재조회 검증, `data_sources` 표시를 지원합니다. campus-companion 소스는 저장된 과목 자동 조회도 지원하며 서버에 별도 배포해야 적용됩니다. 동료 검증용 항목은 `VERIFICATION.md`에 정리했습니다.
+Gradle Sync를 진행한 뒤 Android Studio에서 앱을 실행합니다.
 
-참고: [Muse](https://ai.meta.com/muse/), [Dots](https://chatgpt.com/features/dots/).
+회원가입을 하는 경우 이메일로 전송된 Supabase 인증 메일을 승인한 뒤 로그인합니다.
+
+## 프로젝트 정보
+
+- **프로젝트명:** KUKU
+- **팀명:** 컴파일 에러
+- **앱 이름:** 쿠루 · 공강메이트
+- **Package:** `com.gonggangmate.fresh`
+- **Version:** `2.0-kuru`
+- **Supabase Project:** `gbveuxpgwooarmbzlhlz`
+
+## 보안 및 데이터 처리
+
+로그인 토큰은 Android Keystore와 AES-GCM을 이용해 암호화하여 저장하며 비밀번호는 기기에 저장하지 않습니다.
+
+OpenAI API의 비밀 키는 Android 앱에 포함하지 않고 Supabase 서버의 `OPENAI_API_KEY`, `OPENAI_MODEL` 환경 변수를 사용합니다.
+
+시간표는 로그인한 사용자의 JWT를 이용해 `user_courses`에 저장되며, 사용자별 계획과 대화 데이터도 계정별로 분리하여 관리합니다.
+
+AI는 공모전 준비안, 체크리스트, 과제 개요 등의 **초안 작성을 지원**하지만 실제 공모전·장학금 신청이나 과제 제출을 대신 수행하지 않습니다.
